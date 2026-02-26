@@ -1,0 +1,123 @@
+name: build-libcxx-prebuilt
+
+on:
+  workflow_dispatch:
+    inputs:
+      llvm_tag:
+        description: "LLVM tag, e.g. llvmorg-21.1.0 (empty => latest)"
+        required: false
+        default: ""
+      enable_iterator_debugging:
+        required: false
+        default: "false"
+      instrumented_with_asan:
+        required: false
+        default: "0"
+
+jobs:
+  resolve-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      llvm_tag: ${{ steps.t.outputs.llvm_tag }}
+    steps:
+      - id: t
+        run: |
+          if [ -n "${{ github.event.inputs.llvm_tag }}" ]; then
+            echo "llvm_tag=${{ github.event.inputs.llvm_tag }}" >> $GITHUB_OUTPUT
+          else
+            tag=$(curl -s https://api.github.com/repos/llvm/llvm-project/releases/latest | jq -r .tag_name)
+            echo "llvm_tag=$tag" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: resolve-tag
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-2022, host_os: windows, arch: x64,   config: Release }
+          - { os: windows-2022, host_os: windows, arch: x64,   config: Debug }
+          - { os: windows-2022, host_os: windows, arch: arm64, config: Release }
+          - { os: windows-2022, host_os: windows, arch: arm64, config: Debug }
+          - { os: ubuntu-24.04, host_os: linux,   arch: x64,   config: Release }
+          - { os: ubuntu-24.04, host_os: linux,   arch: x64,   config: Debug }
+          - { os: ubuntu-24.04, host_os: linux,   arch: arm64, config: Release }
+          - { os: ubuntu-24.04, host_os: linux,   arch: arm64, config: Debug }
+
+    runs-on: ${{ matrix.os }}
+    env:
+      ABI_NAMESPACE: __Cr
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install deps (Linux)
+        if: matrix.host_os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake clang lld python3 jq
+
+      - name: Install deps (Windows)
+        if: matrix.host_os == 'windows'
+        shell: pwsh
+        run: |
+          choco install ninja -y
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+
+      - name: Clone llvm
+        shell: bash
+        run: |
+          git clone --depth 1 --branch "${{ needs.resolve-tag.outputs.llvm_tag }}" https://github.com/llvm/llvm-project.git llvm-project
+
+      - name: Build variant
+        shell: bash
+        run: |
+          python scripts/build_libcxx.py \
+            --llvm-src "$PWD/llvm-project" \
+            --out-root "$PWD/out" \
+            --host-os "${{ matrix.host_os }}" \
+            --arch "${{ matrix.arch }}" \
+            --config "${{ matrix.config }}" \
+            --abi-namespace "$ABI_NAMESPACE" \
+            --enable-iterator-debugging "${{ github.event.inputs.enable_iterator_debugging }}" \
+            --instrumented-with-asan "${{ github.event.inputs.instrumented_with_asan }}"
+
+      - name: Package variant
+        shell: bash
+        run: |
+          python scripts/package_variant.py \
+            --out-root "$PWD/out" \
+            --host-os "${{ matrix.host_os }}" \
+            --arch "${{ matrix.arch }}" \
+            --config "${{ matrix.config }}" \
+            --llvm-tag "${{ needs.resolve-tag.outputs.llvm_tag }}" \
+            --abi-namespace "$ABI_NAMESPACE"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libcxx-${{ matrix.host_os }}-${{ matrix.arch }}-${{ matrix.config }}-${{ needs.resolve-tag.outputs.llvm_tag }}
+          path: out/packages/*.zip
+
+  bundle:
+    needs: [resolve-tag, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - run: |
+          mkdir -p release
+          find artifacts -name '*.zip' -exec cp {} release/ \;
+          cd release
+          sha256sum *.zip > SHA256SUMS.txt
+          cat > manifest.json <<EOF
+          {"llvm_tag":"${{ needs.resolve-tag.outputs.llvm_tag }}","abi_namespace":"__Cr"}
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libcxx-bundle-${{ needs.resolve-tag.outputs.llvm_tag }}
+          path: release/*
