@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, os, subprocess, pathlib, shlex
+import argparse, subprocess, pathlib, shlex
 
 def run(cmd, cwd=None):
     print("+", " ".join(shlex.quote(c) for c in cmd))
@@ -28,7 +28,12 @@ def main():
     if args.enable_iterator_debugging.lower() == "true":
         cxx_flags.append("-D_LIBCPP_ENABLE_DEBUG_MODE")
 
-    tzdb_enabled = "ON" if args.enable_tzdb.lower() == "true" else "OFF"
+    tzdb_requested = args.enable_tzdb.lower() == "true"
+    tzdb_effective = tzdb_requested and args.host_os != "windows"
+    if tzdb_requested and args.host_os == "windows":
+        print("[warn] Windows tzdb support is disabled per upstream maintainer guidance.")
+
+    tzdb_enabled = "ON" if tzdb_effective else "OFF"
 
     runtimes = ["libcxx"]
     if args.host_os != "windows":
@@ -62,7 +67,13 @@ def main():
         ]
 
     if args.host_os == "windows":
-        cmake_args += ["-DCMAKE_C_COMPILER=clang-cl", "-DCMAKE_CXX_COMPILER=clang-cl"]
+        cmake_args += [
+            "-DCMAKE_C_COMPILER=clang-cl",
+            "-DCMAKE_CXX_COMPILER=clang-cl",
+            "-DCMAKE_EXE_LINKER_FLAGS=/INCREMENTAL:NO",
+            "-DCMAKE_SHARED_LINKER_FLAGS=/INCREMENTAL:NO",
+            "-DCMAKE_MODULE_LINKER_FLAGS=/INCREMENTAL:NO",
+        ]
         if args.arch == "arm64":
             cmake_args += ["-DCMAKE_C_COMPILER_TARGET=aarch64-pc-windows-msvc",
                            "-DCMAKE_CXX_COMPILER_TARGET=aarch64-pc-windows-msvc"]

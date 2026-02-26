@@ -10,7 +10,7 @@
   - Config: `Debug`, `Release`
 - 自动打包产物（zip + sha256 + json）
 - 自动生成 GitHub Release（tag: `libcxx-<llvm_tag>`）
-- 已支持 `tzdb`（`std::chrono::zoned_time`, `locate_zone`, `get_tzdb` 等）
+- 已支持 `tzdb`（Linux 可启用）
 
 ## 工作流入口
 
@@ -19,7 +19,7 @@
 - `llvm_tag`：LLVM 版本标签（例如 `llvmorg-22.1.0`）
 - `enable_iterator_debugging`：是否启用 iterator debug mode
 - `instrumented_with_asan`：是否开启 ASAN 宏
-- `enable_tzdb`：是否启用 `LIBCXX_ENABLE_TIME_ZONE_DATABASE`（默认 `true`）
+- `enable_tzdb`：是否启用 `LIBCXX_ENABLE_TIME_ZONE_DATABASE`（默认 `true`，Windows 自动关闭）
 
 ## 产物命名
 
@@ -82,7 +82,10 @@ libcxx_prebuilt_enable_for_target(app libcxx_prebuilt::runtime)
 
 - `-DLIBCXX_ENABLE_TIME_ZONE_DATABASE=ON/OFF`
 
-默认开启（`enable_tzdb=true`）。开启后可用 C++20 `<chrono>` 时区能力（例如 `std::chrono::zoned_time`）。
+默认开启（`enable_tzdb=true`）。
+
+- Linux：开启后可用 C++20 `<chrono>` 时区能力（例如 `std::chrono::zoned_time`）。
+- Windows/MSVC：已禁用（与上游维护者结论一致）。
 
 ## 平台备注（和 libc++ vendor 文档一致）
 
