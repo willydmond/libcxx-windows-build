@@ -63,12 +63,12 @@ jobs:
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             binutils-aarch64-linux-gnu libc6-dev-arm64-cross
 
-      - name: Install LLVM clang-20 (Linux x64)
-        if: matrix.host_os == 'linux' && matrix.arch == 'x64'
+      - name: Install LLVM clang-21 (Linux)
+        if: matrix.host_os == 'linux'
         run: |
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
-          sudo ./llvm.sh 22
+          sudo ./llvm.sh 21
 
       - name: Install deps (Windows)
         if: matrix.host_os == 'windows'

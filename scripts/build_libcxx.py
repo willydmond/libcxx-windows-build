@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, os, subprocess, pathlib, shlex, shutil
+import argparse, os, subprocess, pathlib, shlex
 
 def run(cmd, cwd=None):
     print("+", " ".join(shlex.quote(c) for c in cmd))
@@ -27,8 +27,9 @@ def main():
     if args.enable_iterator_debugging.lower() == "true":
         cxx_flags.append("-D_LIBCPP_ENABLE_DEBUG_MODE")
 
-    runtimes = ["libcxx", "libcxxabi"]
+    runtimes = ["libcxx"]
     if args.host_os != "windows":
+        runtimes.append("libcxxabi")
         runtimes.append("libunwind")
 
     cmake_args = [
@@ -37,11 +38,17 @@ def main():
         f"-DCMAKE_INSTALL_PREFIX={install}",
         f"-DLLVM_ENABLE_RUNTIMES={';'.join(runtimes)}",
         "-DLIBCXX_ENABLE_SHARED=OFF", "-DLIBCXX_ENABLE_STATIC=ON",
-        "-DLIBCXXABI_ENABLE_SHARED=OFF", "-DLIBCXXABI_ENABLE_STATIC=ON",
-        "-DLIBCXX_INCLUDE_TESTS=OFF", "-DLIBCXXABI_INCLUDE_TESTS=OFF",
+        "-DLIBCXX_INCLUDE_TESTS=OFF",
         f"-DLIBCXX_ABI_NAMESPACE={args.abi_namespace}",
         f"-DCMAKE_CXX_FLAGS={' '.join(cxx_flags)}",
     ]
+
+    if "libcxxabi" in runtimes:
+        cmake_args += [
+            "-DLIBCXXABI_ENABLE_SHARED=OFF",
+            "-DLIBCXXABI_ENABLE_STATIC=ON",
+            "-DLIBCXXABI_INCLUDE_TESTS=OFF",
+        ]
 
     if "libunwind" in runtimes:
         cmake_args += [
@@ -59,19 +66,15 @@ def main():
             cmake_args += ["-DCMAKE_C_COMPILER_TARGET=x86_64-pc-windows-msvc",
                            "-DCMAKE_CXX_COMPILER_TARGET=x86_64-pc-windows-msvc"]
     else:
+        cmake_args += ["-DCMAKE_C_COMPILER=clang-21", "-DCMAKE_CXX_COMPILER=clang++-21"]
         if args.arch == "arm64":
             cmake_args += [
                 "-DCMAKE_SYSTEM_NAME=Linux",
                 "-DCMAKE_SYSTEM_PROCESSOR=aarch64",
-                "-DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc",
-                "-DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++",
+                "-DCMAKE_C_COMPILER_TARGET=aarch64-linux-gnu",
+                "-DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-gnu",
                 "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
             ]
-        else:
-            c_compiler = "clang-20" if shutil.which("clang-20") else "clang"
-            cxx_compiler = "clang++-20" if shutil.which("clang++-20") else "clang++"
-            print(f"Using Linux x64 compilers: C={c_compiler}, CXX={cxx_compiler}")
-            cmake_args += [f"-DCMAKE_C_COMPILER={c_compiler}", f"-DCMAKE_CXX_COMPILER={cxx_compiler}"]
 
     run(cmake_args)
     run(["cmake", "--build", str(build), "--target", "install", "-j", "4"])
