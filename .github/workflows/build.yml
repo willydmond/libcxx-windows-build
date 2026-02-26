@@ -13,6 +13,9 @@ on:
       instrumented_with_asan:
         required: false
         default: "0"
+      enable_tzdb:
+        required: false
+        default: "true"
 
 jobs:
   resolve-tag:
@@ -93,7 +96,8 @@ jobs:
             --config "${{ matrix.config }}" \
             --abi-namespace "$ABI_NAMESPACE" \
             --enable-iterator-debugging "${{ github.event.inputs.enable_iterator_debugging }}" \
-            --instrumented-with-asan "${{ github.event.inputs.instrumented_with_asan }}"
+            --instrumented-with-asan "${{ github.event.inputs.instrumented_with_asan }}" \
+            --enable-tzdb "${{ github.event.inputs.enable_tzdb }}"
 
       - name: Package variant
         shell: bash
@@ -109,7 +113,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: libcxx-${{ matrix.host_os }}-${{ matrix.arch }}-${{ matrix.config }}-${{ needs.resolve-tag.outputs.llvm_tag }}
-          path: out/packages/*.zip
+          path: out/packages/*
 
   bundle:
     needs: [resolve-tag, build]
@@ -130,3 +134,23 @@ jobs:
         with:
           name: libcxx-bundle-${{ needs.resolve-tag.outputs.llvm_tag }}
           path: release/*
+
+  release:
+    needs: [resolve-tag, bundle]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: libcxx-bundle-${{ needs.resolve-tag.outputs.llvm_tag }}
+          path: release
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: libcxx-${{ needs.resolve-tag.outputs.llvm_tag }}
+          name: libcxx ${{ needs.resolve-tag.outputs.llvm_tag }}
+          generate_release_notes: true
+          files: |
+            release/*

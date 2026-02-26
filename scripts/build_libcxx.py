@@ -15,6 +15,7 @@ def main():
     p.add_argument("--abi-namespace", required=True)
     p.add_argument("--enable-iterator-debugging", default="false")
     p.add_argument("--instrumented-with-asan", default="0")
+    p.add_argument("--enable-tzdb", default="true")
     args = p.parse_args()
 
     out = pathlib.Path(args.out_root).resolve()
@@ -27,6 +28,8 @@ def main():
     if args.enable_iterator_debugging.lower() == "true":
         cxx_flags.append("-D_LIBCPP_ENABLE_DEBUG_MODE")
 
+    tzdb_enabled = "ON" if args.enable_tzdb.lower() == "true" else "OFF"
+
     runtimes = ["libcxx"]
     if args.host_os != "windows":
         runtimes.append("libcxxabi")
@@ -38,6 +41,7 @@ def main():
         f"-DCMAKE_INSTALL_PREFIX={install}",
         f"-DLLVM_ENABLE_RUNTIMES={';'.join(runtimes)}",
         "-DLIBCXX_ENABLE_SHARED=OFF", "-DLIBCXX_ENABLE_STATIC=ON",
+        f"-DLIBCXX_ENABLE_TIME_ZONE_DATABASE={tzdb_enabled}",
         "-DLIBCXX_INCLUDE_TESTS=OFF",
         f"-DLIBCXX_ABI_NAMESPACE={args.abi_namespace}",
         f"-DCMAKE_CXX_FLAGS={' '.join(cxx_flags)}",
