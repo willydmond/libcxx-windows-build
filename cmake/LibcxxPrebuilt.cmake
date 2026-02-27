@@ -129,9 +129,16 @@ function(libcxx_prebuilt_import)
     add_library(${LPX_TARGET} INTERFACE IMPORTED GLOBAL)
   endif()
 
-  set_target_properties(${LPX_TARGET} PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "${_include_dir}"
-  )
+  if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    set_target_properties(${LPX_TARGET} PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES ""
+    )
+    set_property(TARGET ${LPX_TARGET} PROPERTY _LIBCXX_PREBUILT_INCLUDE_DIR "${_include_dir}")
+  else()
+    set_target_properties(${LPX_TARGET} PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${_include_dir}"
+    )
+  endif()
 
   if(_libs)
     set_property(TARGET ${LPX_TARGET} APPEND PROPERTY INTERFACE_LINK_LIBRARIES "${_libs}")
@@ -156,7 +163,12 @@ function(libcxx_prebuilt_enable_for_target target imported_target)
 
   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-      target_compile_options(${target} PRIVATE /clang:-nostdinc++)
+      get_target_property(_libcxx_inc ${imported_target} _LIBCXX_PREBUILT_INCLUDE_DIR)
+      if(_libcxx_inc)
+        target_compile_options(${target} PRIVATE
+          "SHELL:/clang:-isystem /clang:${_libcxx_inc}"
+        )
+      endif()
       target_link_options(${target} PRIVATE /clang:-nostdlib++)
     else()
       target_compile_options(${target} PRIVATE -nostdinc++)
