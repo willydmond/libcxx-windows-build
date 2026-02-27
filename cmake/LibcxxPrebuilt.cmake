@@ -169,7 +169,6 @@ function(libcxx_prebuilt_enable_for_target target imported_target)
           "SHELL:/clang:-isystem /clang:${_libcxx_inc}"
         )
       endif()
-      target_link_options(${target} PRIVATE /clang:-nostdlib++)
     else()
       target_compile_options(${target} PRIVATE -nostdinc++)
       target_link_options(${target} PRIVATE -nostdlib++)
